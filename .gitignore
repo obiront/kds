@@ -1,0 +1,51 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editor / tooling
+.cursor/
+.vscode/
+.idea/
+*.swp
+
+# Claude Code local settings (skills and shared config stay tracked)
+.claude/settings.local.json
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+.yarn/cache
+.yarn/install-state.gz
+
+# Environment variables
+.env
+.env.*
+!.env.example
+*.env
+.envrc
+
+# Build output
+dist/
+build/
+out/
+.next/
+.nuxt/
+.output/
+.vite/
+.turbo/
+.svelte-kit/
+coverage/
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Supabase local state
+supabase/.temp/
+supabase/.branches/
