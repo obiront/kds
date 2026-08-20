@@ -18,12 +18,22 @@
 //   - subscribeToOrders returns an unsubscribe function
 // -----------------------------------------------------------------------------
 
-import type { MenuItem, Order, OrderItem, OrderStatus } from '../types/models'
+import type {
+  MenuItem,
+  Modifier,
+  Order,
+  OrderItem,
+  OrderStatus,
+  Station,
+} from '../types/models'
 import {
   SEED_MENU_ITEMS,
+  SEED_MODIFIERS,
+  SEED_ORDER_ITEM_MODIFIERS,
   SEED_ORDER_ITEMS,
   SEED_ORDER_STATUS_HISTORY,
   SEED_ORDERS,
+  SEED_STATIONS,
 } from './mockSeed'
 
 // -----------------------------------------------------------------------------
@@ -32,12 +42,24 @@ import {
 
 export type Unsubscribe = () => void
 
+/** Modifiers of one order's line items, keyed by order_item_id. */
+export type ModifiersByOrderItem = Record<string, Modifier[]>
+
 export interface OrdersRepository {
+  /** The kitchen stations, in display order. */
+  getStations(): Promise<Station[]>
+
   /** All orders, newest first. */
   getOrders(): Promise<Order[]>
 
   /** Line items belonging to one order, in the order they were added. */
   getOrderItems(orderId: string): Promise<OrderItem[]>
+
+  /**
+   * Modifiers attached to the line items of one order. Items without modifiers
+   * are simply absent from the returned map.
+   */
+  getOrderItemModifiers(orderId: string): Promise<ModifiersByOrderItem>
 
   /**
    * Moves an order to a new status and records the transition in the status
@@ -70,13 +92,17 @@ const NEW_ORDER_MAX_MS = 60_000
 
 const TABLE_COUNT = 15
 const MAX_ITEMS_PER_NEW_ORDER = 3
+const MAX_MODIFIERS_PER_NEW_ITEM = 2
 
 // -----------------------------------------------------------------------------
 // Mutable in-memory store, seeded from the migration
 // -----------------------------------------------------------------------------
 
+const stations = structuredClone(SEED_STATIONS)
+const modifiers = structuredClone(SEED_MODIFIERS)
 const orders: Order[] = structuredClone(SEED_ORDERS)
 const orderItems: OrderItem[] = structuredClone(SEED_ORDER_ITEMS)
+const orderItemModifiers = structuredClone(SEED_ORDER_ITEM_MODIFIERS)
 const statusHistory = structuredClone(SEED_ORDER_STATUS_HISTORY)
 
 // -----------------------------------------------------------------------------
@@ -188,7 +214,19 @@ function createSyntheticOrder(): void {
 
   orders.push(order)
   for (const menuItem of chosen) {
-    orderItems.push(buildOrderItem(order.id, menuItem, createdAt))
+    const item = buildOrderItem(order.id, menuItem, createdAt)
+    orderItems.push(item)
+
+    // Waiters attach a note to some lines and not others; without this the
+    // modifier badges would only ever appear on the seeded orders.
+    const modifierCount = randomInt(0, MAX_MODIFIERS_PER_NEW_ITEM)
+    const chosenModifiers = new Set<string>()
+    while (chosenModifiers.size < modifierCount) {
+      chosenModifiers.add(pickRandom(modifiers).id)
+    }
+    for (const modifierId of chosenModifiers) {
+      orderItemModifiers.push({ order_item_id: item.id, modifier_id: modifierId })
+    }
   }
   statusHistory.push({
     id: crypto.randomUUID(),
@@ -229,6 +267,11 @@ function stopOrderFeed(): void {
 // -----------------------------------------------------------------------------
 
 export const ordersRepository: OrdersRepository = {
+  async getStations() {
+    await networkDelay()
+    return structuredClone(stations).sort((a, b) => a.sort_order - b.sort_order)
+  },
+
   async getOrders() {
     await networkDelay()
     return structuredClone(orders).sort(byNewestFirst)
@@ -241,6 +284,29 @@ export const ordersRepository: OrdersRepository = {
         .filter((item) => item.order_id === orderId)
         .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at)),
     )
+  },
+
+  async getOrderItemModifiers(orderId) {
+    await networkDelay()
+
+    const itemIds = new Set(
+      orderItems.filter((item) => item.order_id === orderId).map((item) => item.id),
+    )
+
+    const grouped: ModifiersByOrderItem = {}
+    for (const link of orderItemModifiers) {
+      if (!itemIds.has(link.order_item_id)) {
+        continue
+      }
+      const modifier = modifiers.find((candidate) => candidate.id === link.modifier_id)
+      if (modifier === undefined) {
+        continue
+      }
+      grouped[link.order_item_id] ??= []
+      grouped[link.order_item_id].push(structuredClone(modifier))
+    }
+
+    return grouped
   },
 
   async updateOrderStatus(orderId, newStatus, userId) {
