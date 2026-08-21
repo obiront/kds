@@ -29,7 +29,7 @@ export function StationFilter({ stations, value, onChange }: StationFilterProps)
             type="button"
             onClick={() => onChange(option.key)}
             aria-pressed={isActive}
-            className={`font-heading tracking-heading min-h-16 rounded-control border px-6 text-xl font-medium transition-colors ${
+            className={`font-heading tracking-heading min-h-14 rounded-control border px-4 text-xl font-medium transition-colors ${
               isActive
                 ? 'border-cool bg-cool text-canvas'
                 : 'border-edge bg-surface text-ink hover:bg-surface-raised hover:border-cool'

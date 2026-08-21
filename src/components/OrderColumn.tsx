@@ -25,14 +25,14 @@ export function OrderColumn({
 }: OrderColumnProps) {
   return (
     <section className="border-edge rounded-panel flex min-h-0 flex-1 flex-col border">
-      <h2 className="flex items-baseline gap-4 px-6 pt-6 pb-4 text-3xl font-semibold">
+      <h2 className="flex items-baseline gap-2 px-4 pt-2 pb-2 text-2xl leading-tight font-semibold">
         <span className="text-cool">{title}</span>
-        <span className="text-muted text-xl font-normal tabular-nums">{orders.length}</span>
+        <span className="text-muted text-lg font-normal tabular-nums">{orders.length}</span>
       </h2>
 
-      <div className="flex flex-col gap-4 overflow-y-auto px-6 pt-2 pb-6">
+      <div className="flex flex-col gap-2 overflow-y-auto px-4 pt-2 pb-2">
         {orders.length === 0 ? (
-          <p className="text-muted text-xl">Порожньо</p>
+          <p className="text-muted text-lg">Порожньо</p>
         ) : (
           orders.map((order) => (
             <OrderCard

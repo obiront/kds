@@ -148,21 +148,21 @@ export default function App() {
 
   return (
     <div className="bg-canvas text-ink flex h-full flex-col">
-      <header className="flex items-center justify-between gap-6 px-6 py-4">
-        <h1 className="text-3xl font-semibold">Лісова пісня — кухня</h1>
+      <header className="flex items-center justify-between gap-4 px-4 py-2">
+        <h1 className="text-2xl font-semibold">Лісова пісня — кухня</h1>
         <StationFilter stations={stations} value={stationFilter} onChange={setStationFilter} />
       </header>
 
       {error !== null && (
-        <p className="border-cool bg-surface-raised text-ink rounded-card mx-6 mb-4 border px-6 py-4 text-xl">
+        <p className="border-cool bg-surface-raised text-ink rounded-card mx-4 mb-2 border px-4 py-2 text-lg">
           {error}
         </p>
       )}
 
       {isLoading ? (
-        <p className="text-muted px-6 text-2xl">Завантаження…</p>
+        <p className="text-muted px-4 text-xl">Завантаження…</p>
       ) : (
-        <main className="flex min-h-0 flex-1 gap-4 px-6 pb-6">
+        <main className="flex min-h-0 flex-1 gap-2 px-4 pb-2">
           {COLUMNS.map((column) => (
             <OrderColumn
               key={column.status}

@@ -70,20 +70,20 @@ export function OrderCard({
       : 'border-edge text-ink hover:bg-surface-raised hover:border-cool'
 
   return (
-    <article className={`rounded-card border p-6 transition-all ${elevation}`}>
-      <header className="flex items-baseline justify-between gap-4">
-        <h3 className="text-ink text-4xl font-semibold tabular-nums">
+    <article className={`rounded-card border p-2 transition-all ${elevation}`}>
+      <header className="flex items-baseline justify-between gap-4 leading-tight">
+        <h3 className="text-ink text-xl font-semibold tabular-nums">
           Стіл {order.table_number}
         </h3>
-        <span className="font-heading tracking-heading text-cool text-4xl font-medium tabular-nums">
+        <span className="font-heading tracking-heading text-cool text-xl font-medium tabular-nums">
           {formatElapsed(order.created_at, now)}
         </span>
       </header>
 
       {details === undefined ? (
-        <p className="text-muted mt-4 text-xl">Завантаження позицій…</p>
+        <p className="text-muted mt-2 text-lg leading-tight">Завантаження позицій…</p>
       ) : (
-        <ul className="divide-edge mt-4 divide-y">
+        <ul className="divide-edge mt-2 divide-y">
           {visibleItems.map((item) => (
             <OrderItemRow
               key={item.id}
@@ -95,25 +95,31 @@ export function OrderCard({
       )}
 
       {hiddenCount > 0 && (
-        <p className="text-muted mt-4 text-lg">Ще {hiddenCount} позиц. інших станцій</p>
+        <p className="text-muted mt-2 text-lg leading-tight">
+          Ще {hiddenCount} позиц. інших станцій
+        </p>
       )}
 
-      {/* Label left, value right: totals line up down the column. */}
-      <p className="mt-4 flex items-baseline justify-between gap-4">
-        <span className="text-muted text-lg whitespace-nowrap">Сума замовлення</span>
-        <span className="text-ink text-2xl font-semibold tabular-nums">
-          {formatHryvnia(orderTotal)}
-        </span>
-      </p>
+      {/* Total and action share one row: the card loses a whole block of
+          vertical space, and the figure still starts at the same x on every
+          card, so totals read down the column. */}
+      <div className="mt-2 flex items-center justify-between gap-4">
+        <p className="flex items-baseline gap-2 leading-tight whitespace-nowrap">
+          <span className="text-muted text-lg">Сума</span>
+          <span className="text-ink text-xl font-semibold tabular-nums">
+            {formatHryvnia(orderTotal)}
+          </span>
+        </p>
 
-      <button
-        type="button"
-        onClick={() => onAdvance(order.id, NEXT_STATUS[status])}
-        disabled={isPending}
-        className={`font-heading tracking-heading rounded-control mt-6 min-h-16 w-full border text-2xl font-semibold transition-colors ${action}`}
-      >
-        {isPending ? 'Зачекайте…' : ACTION_LABEL[status]}
-      </button>
+        <button
+          type="button"
+          onClick={() => onAdvance(order.id, NEXT_STATUS[status])}
+          disabled={isPending}
+          className={`font-heading tracking-heading rounded-control min-h-14 shrink-0 border px-6 text-xl font-semibold transition-colors ${action}`}
+        >
+          {isPending ? 'Зачекайте…' : ACTION_LABEL[status]}
+        </button>
+      </div>
     </article>
   )
 }

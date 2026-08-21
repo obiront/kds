@@ -47,11 +47,50 @@
     height: 100%;
   }
 
+  :root {
+    color-scheme: dark;
+  }
+
   body {
     background-color: var(--color-canvas);
     color: var(--color-ink);
     font-family: var(--font-sans);
     line-height: var(--leading-body);
+  }
+
+  /* Scrollbars follow the palette instead of the operating system: a thin
+     track on the card surface, a thumb on the edge token, and no stepper
+     arrows. Firefox gets the standard properties, Chromium the -webkit ones. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-edge) var(--color-surface);
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background-color: var(--color-surface);
+    border-radius: var(--radius-control);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--color-edge);
+    border-radius: var(--radius-control);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-muted);
+  }
+
+  ::-webkit-scrollbar-button {
+    display: none;
+  }
+
+  ::-webkit-scrollbar-corner {
+    background-color: var(--color-surface);
   }
 
   /* Headings carry the display family and its tighter tracking by default. */
