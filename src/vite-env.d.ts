@@ -3,6 +3,8 @@
 interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL: string
   readonly VITE_SUPABASE_PUBLISHABLE_KEY: string
+  /** 'true' runs the board on seeded demo data; anything else uses Supabase. */
+  readonly VITE_DEMO_MODE?: string
 }
 
 interface ImportMeta {

@@ -36,6 +36,10 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          # Stated rather than left unset: the published board must never fall
+          # back to invented tickets, and a missing variable should read as an
+          # oversight, not as an intention.
+          VITE_DEMO_MODE: 'false'
 
       - uses: actions/upload-pages-artifact@v3
         with:
