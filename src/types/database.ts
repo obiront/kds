@@ -284,7 +284,22 @@ export type Database = {
       }
     }
     Views: Record<never, never>
-    Functions: Record<never, never>
+    Functions: {
+      /**
+       * The only write the display's publishable key can perform. Moves an
+       * order one legal step along new -> prep -> ready -> served and raises on
+       * anything else. Declared here because migration 002 grants EXECUTE on it
+       * to anon; regenerating this file will also surface the role helpers it
+       * sits beside.
+       */
+      advance_order_status: {
+        Args: {
+          p_order_id: string
+          p_new_status: Database['public']['Enums']['order_status']
+        }
+        Returns: Database['public']['Tables']['orders']['Row']
+      }
+    }
     Enums: {
       unit_type: 'portion' | 'weight'
       order_status: 'new' | 'prep' | 'ready' | 'served'

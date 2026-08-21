@@ -2,42 +2,35 @@
 // The single data-access module for the whole application.
 //
 // Nothing outside this file talks to a data source. Components import the
-// `ordersRepository` object and nothing else; they never see a fetch call, a
-// Supabase client, or the mock store below.
+// `ordersRepository` object and nothing else; they never see a query, a channel
+// or a Supabase client.
 //
-// Today this is an in-memory mock built on the migration's seed data. In step 4
-// the implementation is replaced by a Supabase client while `OrdersRepository`
-// stays byte-for-byte the same, so no consumer has to change. That is the whole
-// reason the interface is declared separately from the implementation.
+// This is the Supabase implementation. It replaced an in-memory mock without a
+// single change to `OrdersRepository` or to any component — which was the point
+// of declaring the interface separately in the first place.
 //
-// Behaviours deliberately matched to the real thing:
-//   - every method is async and resolves after a short, variable delay
-//   - callers receive deep copies, so nothing can mutate the store by accident
-//   - subscribeToOrders does NOT replay current state on subscribe, exactly like
-//     a Supabase realtime channel; call getOrders() for the initial load
-//   - subscribeToOrders returns an unsubscribe function
+// Two consequences of the row level security migration are visible here:
+//
+//   - updateOrderStatus calls the advance_order_status function rather than
+//     updating the table. The publishable key holds no UPDATE privilege on
+//     orders; it may only ask the database to take one legal step forward.
+//
+//   - getOrders never sees served orders. The display's SELECT policy stops at
+//     `status <> 'served'`, so a filter here would be redundant — the query is
+//     written without one and the database does the work.
+//
+// order_status_history is not written from here. A trigger records every
+// transition, which is what makes the log worth reading: it cannot be skipped
+// or forged by a client.
 // -----------------------------------------------------------------------------
 
-import type {
-  MenuItem,
-  Modifier,
-  Order,
-  OrderItem,
-  OrderStatus,
-  Station,
-} from '../types/models'
-import {
-  SEED_MENU_ITEMS,
-  SEED_MODIFIERS,
-  SEED_ORDER_ITEM_MODIFIERS,
-  SEED_ORDER_ITEMS,
-  SEED_ORDER_STATUS_HISTORY,
-  SEED_ORDERS,
-  SEED_STATIONS,
-} from './mockSeed'
+import type { RealtimeChannel } from '@supabase/supabase-js'
+
+import { supabase } from './supabaseClient'
+import type { Modifier, Order, OrderItem, OrderStatus, Station } from '../types/models'
 
 // -----------------------------------------------------------------------------
-// Public interface — the contract step 3 codes against and step 4 re-implements
+// Public interface — unchanged from the mock implementation
 // -----------------------------------------------------------------------------
 
 export type Unsubscribe = () => void
@@ -81,186 +74,90 @@ export interface OrdersRepository {
 }
 
 // -----------------------------------------------------------------------------
-// Mock configuration
-// -----------------------------------------------------------------------------
-
-const LATENCY_MIN_MS = 80
-const LATENCY_MAX_MS = 260
-
-const NEW_ORDER_MIN_MS = 30_000
-const NEW_ORDER_MAX_MS = 60_000
-
-const TABLE_COUNT = 15
-const MAX_ITEMS_PER_NEW_ORDER = 3
-const MAX_MODIFIERS_PER_NEW_ITEM = 2
-
-// -----------------------------------------------------------------------------
-// Mutable in-memory store, seeded from the migration
-// -----------------------------------------------------------------------------
-
-const stations = structuredClone(SEED_STATIONS)
-const modifiers = structuredClone(SEED_MODIFIERS)
-const orders: Order[] = structuredClone(SEED_ORDERS)
-const orderItems: OrderItem[] = structuredClone(SEED_ORDER_ITEMS)
-const orderItemModifiers = structuredClone(SEED_ORDER_ITEM_MODIFIERS)
-const statusHistory = structuredClone(SEED_ORDER_STATUS_HISTORY)
-
-// -----------------------------------------------------------------------------
-// Helpers
-// -----------------------------------------------------------------------------
-
-function randomInt(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min
-}
-
-function pickRandom<T>(items: readonly T[]): T {
-  return items[randomInt(0, items.length - 1)]
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-/** Simulates a round trip to the database. */
-function networkDelay(): Promise<void> {
-  return delay(randomInt(LATENCY_MIN_MS, LATENCY_MAX_MS))
-}
-
-function byNewestFirst(a: Order, b: Order): number {
-  return Date.parse(b.created_at) - Date.parse(a.created_at)
-}
-
-/**
- * Stands in for the `line_total` STORED generated column while there is no
- * Postgres to compute it.
- *
- * This is the mock playing the role of the database, not application code doing
- * pricing arithmetic: it exists solely to give a synthetic row the value that
- * Postgres would have materialised on insert. It is private to this module, it
- * is never exported, and it disappears entirely in step 4 when the real
- * generated column takes over. No component ever computes a total.
- */
-function generatedLineTotal(item: Omit<OrderItem, 'line_total'>): number | null {
-  const round2 = (value: number) => Math.round(value * 100) / 100
-
-  switch (item.unit_type) {
-    case 'portion':
-      return item.quantity !== null && item.unit_price_snapshot !== null
-        ? round2(item.quantity * item.unit_price_snapshot)
-        : null
-    case 'weight':
-      return item.weight_grams !== null && item.price_per_100g_snapshot !== null
-        ? round2((item.weight_grams / 100) * item.price_per_100g_snapshot)
-        : null
-  }
-}
-
-/** Builds one line item for a synthetic order, snapshotting the menu row. */
-function buildOrderItem(orderId: string, menuItem: MenuItem, createdAt: string): OrderItem {
-  const isWeight = menuItem.unit_type === 'weight'
-
-  const withoutTotal: Omit<OrderItem, 'line_total'> = {
-    id: crypto.randomUUID(),
-    order_id: orderId,
-    menu_item_id: menuItem.id,
-    station_id: menuItem.station_id,
-    // snapshot columns: copied at creation time, never refreshed from the menu
-    item_name_snapshot: menuItem.name,
-    unit_type: menuItem.unit_type,
-    quantity: isWeight ? null : randomInt(1, 3),
-    weight_grams: isWeight ? randomInt(15, 60) * 10 : null,
-    unit_price_snapshot: isWeight ? null : menuItem.unit_price,
-    price_per_100g_snapshot: isWeight ? menuItem.price_per_100g : null,
-    item_status: 'new',
-    created_at: createdAt,
-  }
-
-  return { ...withoutTotal, line_total: generatedLineTotal(withoutTotal) }
-}
-
-// -----------------------------------------------------------------------------
-// Subscriptions and the synthetic order feed
+// Subscribers
 // -----------------------------------------------------------------------------
 
 const subscribers = new Set<(orders: Order[]) => void>()
 
-let newOrderTimer: ReturnType<typeof setTimeout> | null = null
-
-function notifySubscribers(): void {
-  const snapshot = structuredClone(orders).sort(byNewestFirst)
-  for (const subscriber of subscribers) {
-    subscriber(structuredClone(snapshot))
-  }
-}
-
-function createSyntheticOrder(): void {
-  const createdAt = new Date().toISOString()
-
-  const order: Order = {
-    id: crypto.randomUUID(),
-    table_number: randomInt(1, TABLE_COUNT),
-    waiter_id: null,
-    status: 'new',
-    created_at: createdAt,
-    updated_at: createdAt,
-  }
-
-  const activeMenu = SEED_MENU_ITEMS.filter((item) => item.is_active)
-  const itemCount = randomInt(1, MAX_ITEMS_PER_NEW_ORDER)
-  const chosen = new Set<MenuItem>()
-  while (chosen.size < itemCount) {
-    chosen.add(pickRandom(activeMenu))
-  }
-
-  orders.push(order)
-  for (const menuItem of chosen) {
-    const item = buildOrderItem(order.id, menuItem, createdAt)
-    orderItems.push(item)
-
-    // Waiters attach a note to some lines and not others; without this the
-    // modifier badges would only ever appear on the seeded orders.
-    const modifierCount = randomInt(0, MAX_MODIFIERS_PER_NEW_ITEM)
-    const chosenModifiers = new Set<string>()
-    while (chosenModifiers.size < modifierCount) {
-      chosenModifiers.add(pickRandom(modifiers).id)
-    }
-    for (const modifierId of chosenModifiers) {
-      orderItemModifiers.push({ order_item_id: item.id, modifier_id: modifierId })
-    }
-  }
-  statusHistory.push({
-    id: crypto.randomUUID(),
-    order_id: order.id,
-    from_status: null,
-    to_status: 'new',
-    changed_by: null,
-    changed_at: createdAt,
-  })
-
-  notifySubscribers()
-}
-
 /**
- * Schedules the next synthetic order 30-60 s out. The feed only runs while
- * something is listening, so an unmounted display leaves no timer behind.
+ * Re-reads the board and hands every listener the same snapshot.
+ *
+ * Realtime delivers the fact that something changed; the snapshot comes from a
+ * fresh query so that row level security is applied the same way it is on the
+ * initial load, and so a listener can never assemble state from a partial event.
  */
-function scheduleNextOrder(): void {
-  newOrderTimer = setTimeout(() => {
-    createSyntheticOrder()
-    if (subscribers.size > 0) {
-      scheduleNextOrder()
-    } else {
-      newOrderTimer = null
-    }
-  }, randomInt(NEW_ORDER_MIN_MS, NEW_ORDER_MAX_MS))
-}
+async function refreshSubscribers(): Promise<void> {
+  if (subscribers.size === 0) {
+    return
+  }
 
-function stopOrderFeed(): void {
-  if (newOrderTimer !== null) {
-    clearTimeout(newOrderTimer)
-    newOrderTimer = null
+  const orders = await fetchOrders()
+  for (const subscriber of subscribers) {
+    subscriber([...orders])
   }
 }
+
+// -----------------------------------------------------------------------------
+// Queries
+// -----------------------------------------------------------------------------
+
+async function fetchOrders(): Promise<Order[]> {
+  const { data, error } = await supabase
+    .from('orders')
+    .select('*')
+    .order('created_at', { ascending: false })
+
+  if (error !== null) {
+    throw new Error(`Не вдалося завантажити замовлення: ${error.message}`)
+  }
+
+  return data
+}
+
+// -----------------------------------------------------------------------------
+// The realtime channel
+// -----------------------------------------------------------------------------
+//
+// One channel serves every subscriber, opened when the first arrives and torn
+// down when the last leaves — the same shape the mock used for its timer.
+//
+// The topic carries a unique suffix. A Supabase client allows one channel per
+// topic, and React's StrictMode mounts an effect, unmounts it and mounts it
+// again; with a fixed name the remount collides with a teardown that has not
+// finished yet and the channel dies as CLOSED.
+
+let channel: RealtimeChannel | null = null
+
+function openChannel(): void {
+  if (channel !== null) {
+    return
+  }
+
+  channel = supabase
+    .channel(`kds-orders-${crypto.randomUUID()}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+      void refreshSubscribers()
+    })
+    .subscribe((status, error) => {
+      // A display that quietly stops receiving updates is worse than one that
+      // fails loudly: the cook keeps trusting a frozen board. CLOSED is not
+      // reported — it is the normal end of a teardown.
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        console.warn(`[kds] realtime channel ${status}`, error ?? '')
+      }
+    })
+}
+
+function closeChannel(): void {
+  if (channel === null) {
+    return
+  }
+
+  const closing = channel
+  channel = null
+  void supabase.removeChannel(closing)
+}
+
 
 // -----------------------------------------------------------------------------
 // Implementation
@@ -268,84 +165,93 @@ function stopOrderFeed(): void {
 
 export const ordersRepository: OrdersRepository = {
   async getStations() {
-    await networkDelay()
-    return structuredClone(stations).sort((a, b) => a.sort_order - b.sort_order)
+    const { data, error } = await supabase
+      .from('stations')
+      .select('*')
+      .order('sort_order', { ascending: true })
+
+    if (error !== null) {
+      throw new Error(`Не вдалося завантажити станції: ${error.message}`)
+    }
+
+    return data
   },
 
   async getOrders() {
-    await networkDelay()
-    return structuredClone(orders).sort(byNewestFirst)
+    return fetchOrders()
   },
 
   async getOrderItems(orderId) {
-    await networkDelay()
-    return structuredClone(
-      orderItems
-        .filter((item) => item.order_id === orderId)
-        .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at)),
-    )
+    const { data, error } = await supabase
+      .from('order_items')
+      .select('*')
+      .eq('order_id', orderId)
+      .order('created_at', { ascending: true })
+
+    if (error !== null) {
+      throw new Error(`Не вдалося завантажити позиції замовлення: ${error.message}`)
+    }
+
+    return data
   },
 
   async getOrderItemModifiers(orderId) {
-    await networkDelay()
+    // One round trip: the line ids come from the same query that carries their
+    // modifier rows, rather than a lookup followed by an `in` filter.
+    const { data, error } = await supabase
+      .from('order_items')
+      .select('id, order_item_modifiers(modifiers(*))')
+      .eq('order_id', orderId)
 
-    const itemIds = new Set(
-      orderItems.filter((item) => item.order_id === orderId).map((item) => item.id),
-    )
+    if (error !== null) {
+      throw new Error(`Не вдалося завантажити модифікатори: ${error.message}`)
+    }
 
     const grouped: ModifiersByOrderItem = {}
-    for (const link of orderItemModifiers) {
-      if (!itemIds.has(link.order_item_id)) {
-        continue
+
+    for (const item of data) {
+      const modifiers = item.order_item_modifiers
+        .map((link) => link.modifiers)
+        .filter((modifier): modifier is Modifier => modifier !== null)
+
+      if (modifiers.length > 0) {
+        grouped[item.id] = modifiers
       }
-      const modifier = modifiers.find((candidate) => candidate.id === link.modifier_id)
-      if (modifier === undefined) {
-        continue
-      }
-      grouped[link.order_item_id] ??= []
-      grouped[link.order_item_id].push(structuredClone(modifier))
     }
 
     return grouped
   },
 
-  async updateOrderStatus(orderId, newStatus, userId) {
-    await networkDelay()
-
-    const order = orders.find((candidate) => candidate.id === orderId)
-    if (order === undefined) {
-      throw new Error(`Order ${orderId} not found`)
-    }
-
-    const changedAt = new Date().toISOString()
-    const previousStatus = order.status
-
-    order.status = newStatus
-    order.updated_at = changedAt
-
-    statusHistory.push({
-      id: crypto.randomUUID(),
-      order_id: orderId,
-      from_status: previousStatus,
-      to_status: newStatus,
-      changed_by: userId,
-      changed_at: changedAt,
+  async updateOrderStatus(orderId, newStatus, _userId) {
+    // userId is ignored on purpose: the history trigger reads auth.uid() server
+    // side, so a client cannot claim to be someone else. The parameter stays in
+    // the signature because the interface is the contract components code
+    // against, and it becomes meaningful again once staff log in.
+    const { data, error } = await supabase.rpc('advance_order_status', {
+      p_order_id: orderId,
+      p_new_status: newStatus,
     })
 
-    notifySubscribers()
-    return structuredClone(order)
+    if (error !== null) {
+      throw new Error(`Не вдалося змінити статус замовлення: ${error.message}`)
+    }
+
+    // A served order leaves the display's visible set, so realtime will not
+    // report the change that removed it. Refresh here, exactly as the mock
+    // notified its subscribers after a write.
+    await refreshSubscribers()
+
+    return data
   },
 
   subscribeToOrders(callback) {
     subscribers.add(callback)
-    if (newOrderTimer === null) {
-      scheduleNextOrder()
-    }
+    openChannel()
 
     return () => {
       subscribers.delete(callback)
       if (subscribers.size === 0) {
-        stopOrderFeed()
+        closeChannel()
       }
     }
   },
