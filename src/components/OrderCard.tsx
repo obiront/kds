@@ -40,6 +40,11 @@ export function OrderCard({
   isPending,
   onAdvance,
 }: OrderCardProps) {
+  // The warm accent belongs to 'ready' and nowhere else: the dish is cooked and
+  // going cold, so handing it over is the only thing on the board that cannot
+  // wait. 'new' and 'prep' are work in progress and stay quiet.
+  const isReady = status === 'ready'
+
   const items = details?.items ?? []
 
   const visibleItems =
@@ -53,19 +58,32 @@ export function OrderCard({
   // derives a total from weights and prices itself.
   const orderTotal = items.reduce((sum, item) => sum + (item.line_total ?? 0), 0)
 
+  // Elevation without shadow: lighter surface, accent edge, and a 2px lift.
+  const elevation = isReady
+    ? 'bg-surface-raised border-accent -translate-y-0.5'
+    : 'bg-surface border-edge'
+
+  const action = isPending
+    ? 'bg-surface-raised border-edge text-muted'
+    : isReady
+      ? 'bg-accent border-accent text-canvas hover:bg-accent-hover hover:border-accent-hover'
+      : 'border-edge text-ink hover:bg-surface-raised hover:border-cool'
+
   return (
-    <article className="rounded-xl bg-neutral-800 p-5 shadow-lg">
+    <article className={`rounded-card border p-6 transition-all ${elevation}`}>
       <header className="flex items-baseline justify-between gap-4">
-        <h3 className="text-4xl font-bold text-neutral-50">Стіл {order.table_number}</h3>
-        <span className="font-mono text-4xl tabular-nums text-neutral-300">
+        <h3 className="text-ink text-4xl font-semibold tabular-nums">
+          Стіл {order.table_number}
+        </h3>
+        <span className="font-heading tracking-heading text-cool text-4xl font-medium tabular-nums">
           {formatElapsed(order.created_at, now)}
         </span>
       </header>
 
       {details === undefined ? (
-        <p className="mt-4 text-2xl text-neutral-500">Завантаження позицій…</p>
+        <p className="text-muted mt-4 text-xl">Завантаження позицій…</p>
       ) : (
-        <ul className="mt-4 divide-y divide-neutral-700">
+        <ul className="divide-edge mt-4 divide-y">
           {visibleItems.map((item) => (
             <OrderItemRow
               key={item.id}
@@ -77,21 +95,22 @@ export function OrderCard({
       )}
 
       {hiddenCount > 0 && (
-        <p className="mt-3 text-xl text-neutral-500">
-          Ще {hiddenCount} позиц. інших станцій
-        </p>
+        <p className="text-muted mt-4 text-lg">Ще {hiddenCount} позиц. інших станцій</p>
       )}
 
-      <p className="mt-4 text-2xl text-neutral-400">
-        Сума замовлення:{' '}
-        <span className="font-semibold text-neutral-100">{formatHryvnia(orderTotal)}</span>
+      {/* Label left, value right: totals line up down the column. */}
+      <p className="mt-4 flex items-baseline justify-between gap-4">
+        <span className="text-muted text-lg whitespace-nowrap">Сума замовлення</span>
+        <span className="text-ink text-2xl font-semibold tabular-nums">
+          {formatHryvnia(orderTotal)}
+        </span>
       </p>
 
       <button
         type="button"
         onClick={() => onAdvance(order.id, NEXT_STATUS[status])}
         disabled={isPending}
-        className="mt-5 min-h-20 w-full rounded-lg bg-emerald-600 text-3xl font-bold text-white transition-colors hover:bg-emerald-500 disabled:bg-neutral-600 disabled:text-neutral-400"
+        className={`font-heading tracking-heading rounded-control mt-6 min-h-16 w-full border text-2xl font-semibold transition-colors ${action}`}
       >
         {isPending ? 'Зачекайте…' : ACTION_LABEL[status]}
       </button>

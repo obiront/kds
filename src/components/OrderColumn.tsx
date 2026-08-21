@@ -24,15 +24,15 @@ export function OrderColumn({
   onAdvance,
 }: OrderColumnProps) {
   return (
-    <section className="flex min-h-0 flex-1 flex-col rounded-xl bg-neutral-900">
-      <h2 className="flex items-baseline gap-3 px-5 py-4 text-3xl font-bold text-neutral-100">
-        {title}
-        <span className="text-2xl font-normal text-neutral-500">{orders.length}</span>
+    <section className="border-edge rounded-panel flex min-h-0 flex-1 flex-col border">
+      <h2 className="flex items-baseline gap-4 px-6 pt-6 pb-4 text-3xl font-semibold">
+        <span className="text-cool">{title}</span>
+        <span className="text-muted text-xl font-normal tabular-nums">{orders.length}</span>
       </h2>
 
-      <div className="flex flex-col gap-4 overflow-y-auto px-5 pb-5">
+      <div className="flex flex-col gap-4 overflow-y-auto px-6 pt-2 pb-6">
         {orders.length === 0 ? (
-          <p className="text-2xl text-neutral-600">Порожньо</p>
+          <p className="text-muted text-xl">Порожньо</p>
         ) : (
           orders.map((order) => (
             <OrderCard

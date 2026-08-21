@@ -147,20 +147,20 @@ export default function App() {
   }, [orders, detailsByOrderId, stationFilter])
 
   return (
-    <div className="flex h-full flex-col bg-neutral-950 text-neutral-100">
-      <header className="flex flex-wrap items-center justify-between gap-4 px-6 py-4">
-        <h1 className="text-3xl font-bold">Лісова пісня — кухня</h1>
+    <div className="bg-canvas text-ink flex h-full flex-col">
+      <header className="flex items-center justify-between gap-6 px-6 py-4">
+        <h1 className="text-3xl font-semibold">Лісова пісня — кухня</h1>
         <StationFilter stations={stations} value={stationFilter} onChange={setStationFilter} />
       </header>
 
       {error !== null && (
-        <p className="mx-6 mb-4 rounded-lg bg-red-900 px-5 py-4 text-2xl text-red-100">
+        <p className="border-cool bg-surface-raised text-ink rounded-card mx-6 mb-4 border px-6 py-4 text-xl">
           {error}
         </p>
       )}
 
       {isLoading ? (
-        <p className="px-6 text-3xl text-neutral-500">Завантаження…</p>
+        <p className="text-muted px-6 text-2xl">Завантаження…</p>
       ) : (
         <main className="flex min-h-0 flex-1 gap-4 px-6 pb-6">
           {COLUMNS.map((column) => (

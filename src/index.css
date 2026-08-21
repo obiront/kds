@@ -1,7 +1,65 @@
 @import 'tailwindcss';
 
-html,
-body,
-#root {
-  height: 100%;
+/* Self-hosted so a kitchen display never waits on a font CDN. */
+@import '@fontsource-variable/manrope';
+@import '@fontsource-variable/inter';
+
+/* -----------------------------------------------------------------------------
+   Design tokens — "Лісова пісня" KDS
+   Every colour, family, radius and tracking value used by the interface is
+   declared here. Components reference tokens through Tailwind utilities
+   (bg-surface, text-muted, rounded-card…) and never hardcode a hex value.
+----------------------------------------------------------------------------- */
+
+@theme {
+  /* 60% — the ground the whole board sits on */
+  --color-canvas: #0c0c0e;
+
+  /* 30% — structure */
+  --color-surface: #18181c;
+  --color-surface-raised: #212127;
+  --color-edge: #2a2a31;
+  --color-ink: #ffffff;
+  --color-muted: #8a8a96;
+
+  /* 10% — accent. Warm belongs to exactly one action per screen. */
+  --color-accent: #f29c1e;
+  --color-accent-hover: #ffb443;
+  --color-cool: #d7e2fd;
+
+  /* Two families: Manrope sets headings, Inter carries running text. */
+  --font-heading: 'Manrope Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+
+  --tracking-heading: -0.03em;
+  --leading-body: 1.6;
+
+  /* Three radii, nothing between them. */
+  --radius-control: 8px;
+  --radius-card: 12px;
+  --radius-panel: 16px;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    line-height: var(--leading-body);
+  }
+
+  /* Headings carry the display family and its tighter tracking by default. */
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-heading);
+    letter-spacing: var(--tracking-heading);
+    line-height: 1.2;
+  }
 }

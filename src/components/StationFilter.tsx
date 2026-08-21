@@ -7,6 +7,11 @@ interface StationFilterProps {
   onChange: (value: StationFilterValue) => void
 }
 
+/**
+ * Station selection is a status, not the board's primary action, so the active
+ * chip is filled with the cool token. The warm accent stays reserved for the
+ * one ticket that leads.
+ */
 export function StationFilter({ stations, value, onChange }: StationFilterProps) {
   const options: { key: StationFilterValue; label: string }[] = [
     { key: ALL_STATIONS, label: 'Всі' },
@@ -14,7 +19,7 @@ export function StationFilter({ stations, value, onChange }: StationFilterProps)
   ]
 
   return (
-    <div className="flex gap-3">
+    <div className="flex gap-2">
       {options.map((option) => {
         const isActive = option.key === value
 
@@ -24,10 +29,10 @@ export function StationFilter({ stations, value, onChange }: StationFilterProps)
             type="button"
             onClick={() => onChange(option.key)}
             aria-pressed={isActive}
-            className={`min-h-16 rounded-lg px-8 text-2xl font-semibold transition-colors ${
+            className={`font-heading tracking-heading min-h-16 rounded-control border px-6 text-xl font-medium transition-colors ${
               isActive
-                ? 'bg-amber-500 text-neutral-950'
-                : 'bg-neutral-800 text-neutral-200 hover:bg-neutral-700'
+                ? 'border-cool bg-cool text-canvas'
+                : 'border-edge bg-surface text-ink hover:bg-surface-raised hover:border-cool'
             }`}
           >
             {option.label}
